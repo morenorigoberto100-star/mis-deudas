@@ -1,11 +1,6 @@
-const CACHE='mis-deudas-v4-5-firebase';
+const CACHE='mis-deudas-v4-6-estable';
 const ASSETS=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png'];
-importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js');
-firebase.initializeApp({apiKey:'AIzaSyALzfA6p-xHb6JRBm-5A1kElcl20t8WMwo',authDomain:'mis-deudas-e421d.firebaseapp.com',projectId:'mis-deudas-e421d',storageBucket:'mis-deudas-e421d.firebasestorage.app',messagingSenderId:'92248132062',appId:'1:92248132062:web:e6c9536fdb7610b45e754f'});
-const messaging=firebase.messaging();
-messaging.onBackgroundMessage(payload=>{const n=payload.notification||{},d=payload.data||{};self.registration.showNotification(n.title||'Mis Deudas',{body:n.body||d.body||'Tienes un nuevo recordatorio.',icon:'./icon-192.png',badge:'./icon-192.png',tag:d.tag||'mis-deudas-fcm',data:{url:d.url||'./index.html'}});});
 self.addEventListener('install',e=>{e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));self.skipWaiting();});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));self.clients.claim();});
 self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(resp=>{const copy=resp.clone();caches.open(CACHE).then(c=>c.put(e.request,copy));return resp;}).catch(()=>caches.match(e.request).then(r=>r||caches.match('./index.html'))));});
-self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{for(const c of list){if('focus'in c)return c.focus()}return clients.openWindow((e.notification.data&&e.notification.data.url)||'./index.html')}));});
+self.addEventListener('notificationclick',e=>{e.notification.close();e.waitUntil(clients.matchAll({type:'window',includeUncontrolled:true}).then(list=>{for(const c of list){if('focus'in c)return c.focus()}return clients.openWindow('./index.html')}));});
