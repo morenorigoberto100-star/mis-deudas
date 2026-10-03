@@ -47,14 +47,45 @@ function urgentPayments(){return pending().filter(p=>dayDiff(p.date)<=1)}
 async function showAppNotification(title,body,tag='mis-deudas-aviso'){if(!('Notification'in window)||Notification.permission!=='granted')return false;try{if('serviceWorker'in navigator){let reg=await navigator.serviceWorker.ready;await reg.showNotification(title,{body,icon:'./icon-192.png',badge:'./icon-192.png',tag,renotify:true,data:{url:'./index.html'}});return true}}catch(e){}return false}
 function notificationSummary(){let items=urgentPayments();if(!items.length)return null;let overdue=items.filter(p=>dayDiff(p.date)<0),todayItems=items.filter(p=>dayDiff(p.date)===0),tomorrow=items.filter(p=>dayDiff(p.date)===1),total=items.reduce((s,p)=>s+p.amount,0),parts=[];if(overdue.length)parts.push(`${overdue.length} vencido${overdue.length>1?'s':''}`);if(todayItems.length)parts.push(`${todayItems.length} vence${todayItems.length>1?'n':''} hoy`);if(tomorrow.length)parts.push(`${tomorrow.length} vence${tomorrow.length>1?'n':''} mañana`);return {items,title:'Mis Deudas · recordatorio',body:`${parts.join(' · ')} · ${mx(total)}`}}
 async function checkDueNotifications(force=false){if(!('Notification'in window)||Notification.permission!=='granted')return;let s=notificationSummary();if(!s)return;let key='misDeudasNotif_'+today(),last=localStorage.getItem(key);if(force||last!=='sent'){if(await showAppNotification(s.title,s.body,force?'mis-deudas-prueba':'mis-deudas-'+today()))localStorage.setItem(key,'sent')}}
-function alerts(){let due=pending().filter(p=>dayDiff(p.date)<=3),el=document.getElementById('notice'),perm=('Notification'in window)?Notification.permission:'unsupported';let state=perm==='granted'?'Notificaciones activadas':perm==='denied'?'Notificaciones bloqueadas':'Notificaciones desactivadas';let controls=perm==='default'?'<button class="btn soft" style="margin-top:8px" onclick="requestNotif()">Activar avisos</button>':perm==='granted'?'<button class="btn soft" style="margin-top:8px" onclick="testNotif()">Probar notificación</button>':'';let hint=perm==='granted'?'Avisos configurados para 1 día antes, el día del vencimiento y pagos vencidos. Esta versión los revisa al abrir o volver a la aplicación.':'Activa el permiso de Android para recibir avisos de Mis Deudas.';el.innerHTML=due.length?`<div class="notice"><b>🔔 ${due.length} pago${due.length>1?'s':''} requiere${due.length==1?'':'n'} atención.</b><div style="margin-top:5px">${state}</div>${controls}<div class="hint" style="margin-top:7px">${hint}</div></div>`:`<div class="noticegood"><b>✓ Sin vencimientos urgentes.</b><div class="hint" style="margin-top:4px">${state}</div>${controls}</div>`}
+function alerts(){let due=pending().filter(p=>dayDiff(p.date)<=3),el=document.getElementById('notice'),perm=('Notification'in window)?Notification.permission:'unsupported';let state=perm==='granted'?'Notificaciones activadas':perm==='denied'?'Notificaciones bloqueadas':'Notificaciones desactivadas';let controls=perm==='default'?'<button class="btn soft" style="margin-top:8px" onclick="requestNotif()">Activar avisos</button>':perm==='granted'?'<button class="btn soft" style="margin-top:8px" onclick="testNotif()">Probar notificación</button>':'';let fcmToken=localStorage.getItem('misDeudasFCMToken')||'',pushState=fcmToken?'Firebase Push conectado':'Firebase Push pendiente',pushControls=perm==='granted'?(fcmToken?'<button class="btn primary" style="margin-top:8px;margin-left:6px" onclick="copiarTokenFCM()">Copiar token FCM</button>':'<button class="btn primary" style="margin-top:8px;margin-left:6px" onclick="activarPushFirebase()">Conectar Firebase</button>'):'',hint=perm==='granted'?`Avisos locales activos · ${pushState}. Firebase permitirá probar avisos con la app cerrada.`:'Activa el permiso de Android para recibir avisos de Mis Deudas.';el.innerHTML=due.length?`<div class="notice"><b>🔔 ${due.length} pago${due.length>1?'s':''} requiere${due.length==1?'':'n'} atención.</b><div style="margin-top:5px">${state}</div>${controls}${pushControls}<div class="hint" style="margin-top:7px">${hint}</div></div>`:`<div class="noticegood"><b>✓ Sin vencimientos urgentes.</b><div class="hint" style="margin-top:4px">${state}</div>${controls}${pushControls}</div>`}
 function requestNotif(){if(!('Notification'in window))return alert('Este navegador no permite notificaciones.');Notification.requestPermission().then(async x=>{render();if(x==='granted')await checkDueNotifications(true)})}
 async function testNotif(){let s=notificationSummary(),body=s?s.body:'Las notificaciones de Mis Deudas están funcionando correctamente.';let ok=await showAppNotification('Mis Deudas · prueba',body,'mis-deudas-prueba-'+Date.now());if(!ok)alert('No se pudo mostrar la notificación. Revisa el permiso de notificaciones de Mis Deudas en Android.')}
 window.addEventListener('focus',()=>checkDueNotifications(false));document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkDueNotifications(false)});setTimeout(()=>checkDueNotifications(false),1200);
 render();</script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-messaging-compat.js"></script>
+<script>
+const FIREBASE_CONFIG={apiKey:'AIzaSyALzfA6p-xHb6JRBm-5A1kElcl20t8WMwo',authDomain:'mis-deudas-e421d.firebaseapp.com',projectId:'mis-deudas-e421d',storageBucket:'mis-deudas-e421d.firebasestorage.app',messagingSenderId:'92248132062',appId:'1:92248132062:web:e6c9536fdb7610b45e754f'};
+const VAPID_KEY='BAPNCU5v-9Ijf_gj5fEi-dF0NDz6nhfU-27ptTcFYEQaR0BpoirnmijWS4S20hDb-AvfDjdvgW018lqkTDE5RLo';
+let fcmMessaging=null;
+async function connectFirebasePush(){
+  if(!('serviceWorker' in navigator)||!('Notification' in window))return;
+  try{
+    const reg=await navigator.serviceWorker.register('./sw.js');
+    await navigator.serviceWorker.ready;
+    if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+    fcmMessaging=firebase.messaging();
+    if(Notification.permission==='granted'){
+      const token=await fcmMessaging.getToken({vapidKey:VAPID_KEY,serviceWorkerRegistration:reg});
+      if(token){localStorage.setItem('misDeudasFCMToken',token);window.dispatchEvent(new Event('fcm-ready'));}
+    }
+  }catch(e){console.error('Firebase Push:',e);localStorage.setItem('misDeudasFCMError',String(e&&e.message||e));}
+}
+async function activarPushFirebase(){
+  const p=await Notification.requestPermission();
+  if(p==='granted'){await connectFirebasePush();render();}else render();
+}
+async function copiarTokenFCM(){
+  const t=localStorage.getItem('misDeudasFCMToken')||'';
+  if(!t)return alert('Aún no se ha generado el token de Firebase. Cierra y vuelve a abrir la app con Internet.');
+  try{await navigator.clipboard.writeText(t);alert('Token FCM copiado.');}catch(e){prompt('Copia este token FCM:',t);}
+}
+window.addEventListener('load',connectFirebasePush);
+window.addEventListener('fcm-ready',()=>render());
+</script>
 <script>
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').then(r=>r.update()).catch(() => {}));
 }
 </script>
 </body></html>
