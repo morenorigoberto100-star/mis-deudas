@@ -1,7 +1,7 @@
 {
   "name": "Mis Deudas - Control Financiero",
   "short_name": "Mis Deudas",
-  "description": "Control personal de deudas, pagos y vencimientos.",
+  "description": "Control personal de deudas, pagos, vencimientos y recordatorios.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
